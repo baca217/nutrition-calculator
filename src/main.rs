@@ -3,9 +3,18 @@ extern crate serde;
 use serde::Deserialize;
 use reqwest::Error;
 use std::env;
+#[macro_use]
+extern crate crossterm;
+
+use crossterm::cursor;
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::style::Print;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use std::io::{stdout, Write};
 
 #[derive(Deserialize, Debug)]
-struct Fields {
+struct Fields 
+{
     item_id : String,
     item_name : String,
     brand_name : String,
@@ -16,7 +25,8 @@ struct Fields {
 }
 
 #[derive(Deserialize, Debug)]
-struct Hits {
+struct Hits 
+{
     _index: String,
     _type : String,
     _id : String,
@@ -25,15 +35,67 @@ struct Hits {
 }
 
 #[derive(Deserialize, Debug)]
-struct Data {
+struct Data 
+{
     total_hits: u32,
     max_score: f32,
     hits: Vec<Hits>,
 }
 
+fn key_test()
+{
+    let mut stdout = stdout();
+    enable_raw_mode().unwrap();
+
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(r#"ctrl + q to exit, ctrl + x 
+        to print "Hello World", alt + t to print "crossterm is cool""#))
+        .unwrap();
+
+    loop
+    {
+        execute!(stdout, cursor::MoveTo(0,0)).unwrap();
+
+        match read().unwrap()
+        {
+            Event::Key(KeyEvent
+                       {
+                           code : KeyCode::Char('h'),
+                           modifiers : KeyModifiers::CONTROL,
+
+                       }) => execute!(stdout, Clear(ClearType::All), Print("Hello World!")).unwrap(),
+            Event::Key(KeyEvent
+                       {
+                           code : KeyCode::Char('t'),
+                           modifiers : KeyModifiers::ALT,
+
+                       }) => execute!(stdout, Clear(ClearType::All), Print("crossterm is cool")).unwrap(),
+            Event::Key(KeyEvent
+                       {
+                           code : KeyCode::Char('q'),
+                           modifiers : KeyModifiers::CONTROL,
+
+                       }) => break,
+            _ => (),
+        }
+    }
+
+    disable_raw_mode().unwrap();
+    Ok(())
+}
+
 #[tokio::main]
 async fn main()  -> Result<(), Error>
 {
+    key_test();
+    std::process::exit(match run_app() 
+    {
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("error: {:?}", err);
+            1
+        }
+    });
+    //-------------------------------------------------------------------
     let args: Vec<String> = env::args().collect();
 
     let key = &args[1];
