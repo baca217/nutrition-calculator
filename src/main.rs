@@ -80,21 +80,12 @@ fn key_test()
     }
 
     disable_raw_mode().unwrap();
-    Ok(())
 }
 
 #[tokio::main]
 async fn main()  -> Result<(), Error>
 {
     key_test();
-    std::process::exit(match run_app() 
-    {
-        Ok(_) => 0,
-        Err(err) => {
-            eprintln!("error: {:?}", err);
-            1
-        }
-    });
     //-------------------------------------------------------------------
     let args: Vec<String> = env::args().collect();
 
@@ -124,9 +115,9 @@ async fn main()  -> Result<(), Error>
         println!("nf total fat : {}", i.fields.nf_total_fat);
         println!("");
     }
-
+    Ok(())
+}
 //    let string = res.text().await?;
 //    println!("Text: \n{}", string);
 
-    Ok(())
-}
+
