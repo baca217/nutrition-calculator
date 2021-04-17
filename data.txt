@@ -1,0 +1,4 @@
+protein: 40%
+carbs: 40%
+fat: 20%
+calories: 2075

@@ -3,6 +3,7 @@ extern crate serde;
 use serde::Deserialize;
 use reqwest::Error;
 use std::env;
+use std::fs;
 #[macro_use]
 extern crate crossterm;
 
@@ -10,7 +11,7 @@ use crossterm::cursor;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
-use std::io::{stdout, Write};
+use std::io::{stdin, stdout, Read, Write};
 
 #[derive(Deserialize, Debug)]
 struct Fields 
@@ -22,6 +23,7 @@ struct Fields
     nf_total_fat: f32,
     nf_serving_size_qty : u32,
     nf_serving_size_unit : String,
+//    nf_total_carbohydrates : f32
 }
 
 #[derive(Deserialize, Debug)]
@@ -42,9 +44,17 @@ struct Data
     hits: Vec<Hits>,
 }
 
+fn pause() {
+    let mut stdout = stdout();
+    stdout.write(b"Press Enter to continue...").unwrap();
+    stdout.flush().unwrap();
+    stdin().read(&mut [0]).unwrap();
+}
+
 fn move_through_menu(stuff: Vec<Hits>)
 {
     let mut stdout = stdout();
+    pause();
     enable_raw_mode().unwrap();
     let MENU = "use left and right arrow keys to move through menu";
     let MAX = stuff.len();
@@ -64,14 +74,10 @@ fn move_through_menu(stuff: Vec<Hits>)
                            code : KeyCode::Right,
                            ..
                        }) => {
-                if index < MAX
+                if index < MAX - 1
                 {
                     index += 1;
-                    print_item(&stuff[index])
-                }
-                else
-                {
-                    println!("index is at {}, can't add 1", index);
+                    print_item(&index, &stuff[index])
                 }
             },
             Event::Key(KeyEvent
@@ -82,96 +88,43 @@ fn move_through_menu(stuff: Vec<Hits>)
                 if index > 0
                 {
                     index -= 1;
-                    print_item(&stuff[index])
-                }
-                else
-                {
-                    println!("index is at {}, can't subtract 1", index);
+                    print_item(&index, &stuff[index])
                 }
             },
-            _ => execute!(stdout, Clear(ClearType::All), Print(MENU)).unwrap(),
+            Event::Key(KeyEvent
+                       {
+                            code : KeyCode::Char('c'),
+                            modifiers : KeyModifiers::CONTROL,
+                       }) => {
+                execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0)).unwrap();
+
+                break
+            },
+            _ => (),
         }
     }
 
     disable_raw_mode().unwrap();
 }
 
-
-fn key_test()
+fn print_item(index : &usize, i : &Hits)
 {
     let mut stdout = stdout();
-    enable_raw_mode().unwrap();
-    let MENU = r#"ctrl + q to exit, ctrl + x to print "Hello World", alt + t to print "crossterm is cool""#;
 
-    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(MENU))
-        .unwrap();
-
-    loop
-    {
-        execute!(stdout, cursor::MoveTo(0,0)).unwrap();
-
-        match read().unwrap()
-        {
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Char('h'),
-                           modifiers : KeyModifiers::CONTROL,
-                       }) => execute!(stdout, Clear(ClearType::All), Print("Hello World!")).unwrap(),
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Char('t'),
-                           modifiers : KeyModifiers::ALT,
-                       }) => execute!(stdout, Clear(ClearType::All), Print("crossterm is cool")).unwrap(),
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Char('q'),
-                           modifiers : KeyModifiers::CONTROL,
-                       }) => break,
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Up,
-                           ..
-                       }) => execute!(stdout, Clear(ClearType::All), Print("pressed up!!!")).unwrap(),
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Down,
-                           ..
-                       }) => execute!(stdout, Clear(ClearType::All), Print("pressed down!!!")).unwrap(),
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Right,
-                           ..
-                       }) => execute!(stdout, Clear(ClearType::All), Print("pressed right!!!")).unwrap(),
-            Event::Key(KeyEvent
-                       {
-                           code : KeyCode::Left,
-                           ..
-                       }) => execute!(stdout, Clear(ClearType::All), Print("pressed left!!!")).unwrap(),
-            _ => execute!(stdout, Clear(ClearType::All), Print(MENU)).unwrap(),
-        }
-    }
-
-    disable_raw_mode().unwrap();
-}
-
-fn print_item(i : &Hits)
-{
-    let mut stdout = stdout();
-    enable_raw_mode().unwrap();
-
-    let holder = "";
-    println!(
-    "index : {}s\n
-    type : {}s\n 
-    id : {}s\n 
-    score : {}s\n 
-    item_id : {}s\n 
-    item_name : {}s\n 
-    brand_name : {}s\n 
-    nf_serving_size_qty : {}s\n 
-    nf_serving_size_unit : {}s\n 
-    nf calories : {}s\n 
-    nf total fat : {}s\n",
+    let holder = format!(
+    "Number : {} \n\r\
+    index : {}\n\r\
+    type : {}\n\r\
+    id : {}\n\r\
+    score : {}\n\r\
+    item_id : {}\n\r\
+    item_name : {}\n\r\
+    brand_name : {}\n\r\
+    nf_serving_size_qty : {}\n\r\
+    nf_serving_size_unit : {}\n\r\
+    nf calories : {}\n\r\
+    nf total fat : {}",
+    index + 1,
     i._index,
     i._type,
     i._id,
@@ -184,7 +137,6 @@ fn print_item(i : &Hits)
     i.fields.nf_calories,
     i.fields.nf_total_fat
     );
-
     execute!(stdout, Clear(ClearType::All), Print(holder)).unwrap(); 
 }
 
@@ -196,22 +148,21 @@ async fn main()  -> Result<(), Error>
     //-------------------------------------------------------------------
     let args: Vec<String> = env::args().collect();
 
-    let key = &args[1];
+    let mut key = fs::read_to_string("nutrikey.txt").unwrap();
+    key = key.trim().to_string();
     let client = reqwest::Client::new();
     let res = client
         .get("https://nutritionix-api.p.rapidapi.com/v1_1/search/cheddar%20cheese")
         .header("x-rapidapi-key" , key)
         .header("x-rapidapi-host" ,  "nutritionix-api.p.rapidapi.com")
         .header("useQueryString", "true")
-        .query(&[("fields", "item_name,item_id,brand_name,nf_calories,nf_total_fat")])
+        .query(&[("fields", "item_id,item_name,brand_name,nf_calories,nf_total_fat,nf_serving_size_qty,nf_serving_size_unit")])
         .send()
         .await?;
-
+//    let text = res.text().await?;
+//   println!("{:?}", text);
     let json: Data = res.json().await?;
+    println!("{:?}", json.hits[0]);
     move_through_menu(json.hits);
     Ok(())
 }
-//    let string = res.text().await?;
-//    println!("Text: \n{}", string);
-
-
