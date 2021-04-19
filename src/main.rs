@@ -2,7 +2,6 @@ extern crate tokio;
 extern crate serde;
 use serde::Deserialize;
 use reqwest::Error;
-use std::env;
 use std::fs;
 #[macro_use]
 extern crate crossterm;
@@ -13,7 +12,7 @@ use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
 use std::io::{stdin, stdout, Read, Write};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct Fields 
 {
     item_id : String,
@@ -26,7 +25,7 @@ struct Fields
 //    nf_total_carbohydrates : f32
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct Hits 
 {
     _index: String,
@@ -44,7 +43,8 @@ struct Data
     hits: Vec<Hits>,
 }
 
-fn pause() {
+fn pause() 
+{
     let mut stdout = stdout();
     stdout.write(b"Press Enter to continue...").unwrap();
     stdout.flush().unwrap();
@@ -56,11 +56,13 @@ fn move_through_menu(stuff: Vec<Hits>)
     let mut stdout = stdout();
     pause();
     enable_raw_mode().unwrap();
-    let MENU = "use left and right arrow keys to move through menu";
-    let MAX = stuff.len();
+    let mut menu = "use left and right arrow keys to move through menu\n\r".to_owned();
+    menu.push_str(&item_to_string(&stuff[0]));
+    let max = stuff.len();
     let mut index = 0;
+    let mut items: Vec<Hits> = Vec::new();
 
-    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(MENU))
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(menu))
         .unwrap();
 
     loop
@@ -74,7 +76,7 @@ fn move_through_menu(stuff: Vec<Hits>)
                            code : KeyCode::Right,
                            ..
                        }) => {
-                if index < MAX - 1
+                if index < max - 1
                 {
                     index += 1;
                     print_item(&index, &stuff[index])
@@ -90,6 +92,16 @@ fn move_through_menu(stuff: Vec<Hits>)
                     index -= 1;
                     print_item(&index, &stuff[index])
                 }
+            },
+            Event::Key(KeyEvent
+                       {
+                           code : KeyCode::Enter,
+                           ..
+                       }) => {
+                items.push(stuff[index].clone());
+                let mut temp = "ADDED CURRENT ITEM TO LIST\n\r".to_owned();
+                temp.push_str(&item_to_string(&stuff[index]));
+                execute!(stdout, Clear(ClearType::All), Print(temp), cursor::MoveTo(0,0)).unwrap();
             },
             Event::Key(KeyEvent
                        {
@@ -110,10 +122,14 @@ fn move_through_menu(stuff: Vec<Hits>)
 fn print_item(index : &usize, i : &Hits)
 {
     let mut stdout = stdout();
+    let holder = item_to_string(i);
+    execute!(stdout, Clear(ClearType::All), Print(holder)).unwrap(); 
+}
 
-    let holder = format!(
-    "Number : {} \n\r\
-    index : {}\n\r\
+fn item_to_string(i : &Hits) -> String
+{
+    return format!(
+    "index : {}\n\r\
     type : {}\n\r\
     id : {}\n\r\
     score : {}\n\r\
@@ -124,7 +140,6 @@ fn print_item(index : &usize, i : &Hits)
     nf_serving_size_unit : {}\n\r\
     nf calories : {}\n\r\
     nf total fat : {}",
-    index + 1,
     i._index,
     i._type,
     i._id,
@@ -137,7 +152,6 @@ fn print_item(index : &usize, i : &Hits)
     i.fields.nf_calories,
     i.fields.nf_total_fat
     );
-    execute!(stdout, Clear(ClearType::All), Print(holder)).unwrap(); 
 }
 
 #[tokio::main]
@@ -146,7 +160,6 @@ async fn main()  -> Result<(), Error>
     //key_test();
     //std::process::exit(1);
     //-------------------------------------------------------------------
-    let args: Vec<String> = env::args().collect();
 
     let mut key = fs::read_to_string("nutrikey.txt").unwrap();
     key = key.trim().to_string();
