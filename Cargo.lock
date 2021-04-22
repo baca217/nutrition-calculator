@@ -234,6 +234,7 @@ name = "health_info_calculator"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "percent-encoding",
  "reqwest",
  "serde",
  "serde_derive",

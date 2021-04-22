@@ -10,7 +10,8 @@ use crossterm::cursor;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdout, Write};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
 #[derive(Deserialize, Debug, Clone)]
 struct Fields 
@@ -20,7 +21,7 @@ struct Fields
     brand_name : String,
     nf_calories: f32,
     nf_total_fat: f32,
-    nf_serving_size_qty : u32,
+    nf_serving_size_qty : f32,
     nf_serving_size_unit : String,
 //    nf_total_carbohydrates : f32
 }
@@ -43,18 +44,9 @@ struct Data
     hits: Vec<Hits>,
 }
 
-fn pause() 
+fn move_through_menu(stuff: &Vec<Hits>)
 {
     let mut stdout = stdout();
-    stdout.write(b"Press Enter to continue...").unwrap();
-    stdout.flush().unwrap();
-    stdin().read(&mut [0]).unwrap();
-}
-
-fn move_through_menu(stuff: Vec<Hits>)
-{
-    let mut stdout = stdout();
-    pause();
     enable_raw_mode().unwrap();
     let mut menu = "use left and right arrow keys to move through menu\n\r".to_owned();
     menu.push_str(&item_to_string(&stuff[0]));
@@ -112,6 +104,14 @@ fn move_through_menu(stuff: Vec<Hits>)
 
                 break
             },
+            Event::Key(KeyEvent
+                       {
+                            code : KeyCode::Char('i'),
+                            ..
+                       }) => {
+                move_through_menu(&items);
+            },
+
             _ => (),
         }
     }
@@ -119,7 +119,7 @@ fn move_through_menu(stuff: Vec<Hits>)
     disable_raw_mode().unwrap();
 }
 
-fn print_item(index : &usize, i : &Hits)
+fn print_item(_index : &usize, i : &Hits)
 {
     let mut stdout = stdout();
     let holder = item_to_string(i);
@@ -129,22 +129,12 @@ fn print_item(index : &usize, i : &Hits)
 fn item_to_string(i : &Hits) -> String
 {
     return format!(
-    "index : {}\n\r\
-    type : {}\n\r\
-    id : {}\n\r\
-    score : {}\n\r\
-    item_id : {}\n\r\
-    item_name : {}\n\r\
-    brand_name : {}\n\r\
-    nf_serving_size_qty : {}\n\r\
-    nf_serving_size_unit : {}\n\r\
-    nf calories : {}\n\r\
-    nf total fat : {}",
-    i._index,
-    i._type,
-    i._id,
-    i._score,
-    i.fields.item_id,
+    "Item Name : {}\n\r\
+    Brand Name : {}\n\r\
+    Serving Size qty : {}\n\r\
+    Serving Size unit : {}\n\r\
+    Calories : {}\n\r\
+    Total Fat : {}",
     i.fields.item_name,
     i.fields.brand_name,
     i.fields.nf_serving_size_qty,
@@ -157,16 +147,22 @@ fn item_to_string(i : &Hits) -> String
 #[tokio::main]
 async fn main()  -> Result<(), Error>
 {
-    //key_test();
-    //std::process::exit(1);
-    //-------------------------------------------------------------------
-
-    let mut key = fs::read_to_string("nutrikey.txt").unwrap();
+    let mut key = fs::read_to_string("nutrikey.txt").unwrap().trim().to_string().clone();
+    const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'`');
     key = key.trim().to_string();
     let client = reqwest::Client::new();
-    let res = client
-        .get("https://nutritionix-api.p.rapidapi.com/v1_1/search/cheddar%20cheese")
-        .header("x-rapidapi-key" , key)
+    loop
+    {
+        let mut food = String::new();
+        println!("Enter a food you would like to search: ");
+        std::io::stdin().read_line(&mut food).unwrap();
+        if food == "stop\n" || food == "s\n"
+        {break}
+        let after = utf8_percent_encode(&food, FRAGMENT).to_string();
+        println!("before: {}\nafter: {}", food, after);
+        let res = client
+        .get(format!("https://nutritionix-api.p.rapidapi.com/v1_1/search/{}",after))
+        .header("x-rapidapi-key" , &key)
         .header("x-rapidapi-host" ,  "nutritionix-api.p.rapidapi.com")
         .header("useQueryString", "true")
         .query(&[("fields", "item_id,item_name,brand_name,nf_calories,nf_total_fat,nf_serving_size_qty,nf_serving_size_unit")])
@@ -175,7 +171,7 @@ async fn main()  -> Result<(), Error>
 //    let text = res.text().await?;
 //   println!("{:?}", text);
     let json: Data = res.json().await?;
-    println!("{:?}", json.hits[0]);
-    move_through_menu(json.hits);
-    Ok(())
+    move_through_menu(&json.hits);
+    }
+        Ok(())
 }
