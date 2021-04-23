@@ -1,17 +1,17 @@
 extern crate tokio;
 extern crate serde;
-use serde::Deserialize;
-use reqwest::Error;
+use serde::Deserialize; //unpacking api call values
+use reqwest::Error; //error for reqest crate
 use std::fs;
 #[macro_use]
 extern crate crossterm;
-
-use crossterm::cursor;
-use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::style::Print;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
-use std::io::{stdout, Write};
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use crossterm::cursor; //tracking the cursor
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers}; //catching input
+use crossterm::style::Print; //cross platform print
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType}; //cross platform types
+use std::io::{stdout, stdin, Read, Write};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS}; //for encoding string to api urls
+mod tools;
 
 #[derive(Deserialize, Debug, Clone)]
 struct Fields 
@@ -54,7 +54,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
     let mut index = 0;
     let mut items: Vec<Hits> = Vec::new();
 
-    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(menu))
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(&menu))
         .unwrap();
 
     loop
@@ -63,7 +63,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
 
         match read().unwrap()
         {
-            Event::Key(KeyEvent
+            Event::Key(KeyEvent //move right through the menu
                        {
                            code : KeyCode::Right,
                            ..
@@ -74,7 +74,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
                     print_item(&index, &stuff[index])
                 }
             },
-            Event::Key(KeyEvent
+            Event::Key(KeyEvent //move left through the menu
                        {
                            code : KeyCode::Left,
                            ..
@@ -85,7 +85,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
                     print_item(&index, &stuff[index])
                 }
             },
-            Event::Key(KeyEvent
+            Event::Key(KeyEvent //add current item to list
                        {
                            code : KeyCode::Enter,
                            ..
@@ -95,7 +95,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
                 temp.push_str(&item_to_string(&stuff[index]));
                 execute!(stdout, Clear(ClearType::All), Print(temp), cursor::MoveTo(0,0)).unwrap();
             },
-            Event::Key(KeyEvent
+            Event::Key(KeyEvent //break from the function
                        {
                             code : KeyCode::Char('c'),
                             modifiers : KeyModifiers::CONTROL,
@@ -104,20 +104,110 @@ fn move_through_menu(stuff: &Vec<Hits>)
 
                 break
             },
-            Event::Key(KeyEvent
+            Event::Key(KeyEvent //checkout the items that were saved
                        {
                             code : KeyCode::Char('i'),
                             ..
                        }) => {
-                move_through_menu(&items);
+                items = move_through_items(items);
+                execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(&menu))
+                    .unwrap();
             },
-
-            _ => (),
+            _ => (), //catch all, do nothing
         }
     }
 
     disable_raw_mode().unwrap();
 }
+
+
+fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
+{
+    let mut stdout = stdout();
+    enable_raw_mode().unwrap();
+    if items.len() == 0
+    {
+        execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), 
+                 Print("nothing in the saved list!\r\n")).unwrap();
+        tools::pause();
+        return items;
+    }
+        let mut menu = "use left and right arrow keys to move through items\n\r".to_owned();
+    menu.push_str(&item_to_string(&items[0]));
+    let max = items.len();
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), 
+                 Print(format!("MAX: {}!\r\n",max))).unwrap();
+    tools::pause();
+    let mut index = 0;
+    let _no_mods = KeyModifiers::empty();
+
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(menu))
+        .unwrap();
+
+    loop
+    {
+        execute!(stdout, cursor::MoveTo(0,0)).unwrap();
+
+        match read().unwrap()
+        {
+            Event::Key(KeyEvent //move right through menu
+                       {
+                           code : KeyCode::Right,
+                           ..
+                       }) => {
+                if index < max - 1
+                {
+                    index += 1;
+                    print_item(&index, &items[index])
+                }
+            },
+            Event::Key(KeyEvent //move left through menu
+                       {
+                           code : KeyCode::Left,
+                           ..
+                       }) => {
+                if index > 0
+                {
+                    index -= 1;
+                    print_item(&index, &items[index])
+                }
+            },
+            Event::Key(KeyEvent //break from function
+                       {
+                            code : KeyCode::Char('c'),
+                            modifiers : KeyModifiers::CONTROL,
+                       }) => {
+                execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0)).unwrap();
+
+                break
+            },
+            Event::Key(KeyEvent //delete the curent item
+                       {
+                            code : KeyCode::Char('d'),
+                            ..
+                       }) => {
+                loop
+                {
+                    execute!(stdout, Clear(ClearType::All), Print("are you sure you would like to remove the food? ")).unwrap();
+                    disable_raw_mode().unwrap();
+                    let ans = tools::get_input();
+                    enable_raw_mode().unwrap();
+                    execute!(stdout, Clear(ClearType::All), Print(format!("ans : {}",ans))).unwrap();
+                    if ans == "yes\n" || ans == "y\n" && items.len() != 0
+                    {
+                        items.remove(index);
+                        break;
+                    }
+                    else if ans == "no\n" || ans == "n\n"
+                    {break}
+                }
+            },
+            _ => (),
+        }
+    }
+    return items;
+}
+
 
 fn print_item(_index : &usize, i : &Hits)
 {
