@@ -71,7 +71,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
                 if index < max - 1
                 {
                     index += 1;
-                    print_item(&index, &stuff[index])
+                    print_item(&index, &stuff[index], None)
                 }
             },
             Event::Key(KeyEvent //move left through the menu
@@ -82,7 +82,7 @@ fn move_through_menu(stuff: &Vec<Hits>)
                 if index > 0
                 {
                     index -= 1;
-                    print_item(&index, &stuff[index])
+                    print_item(&index, &stuff[index], None)
                 }
             },
             Event::Key(KeyEvent //add current item to list
@@ -132,21 +132,24 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
         tools::pause();
         return items;
     }
-        let mut menu = "use left and right arrow keys to move through items\n\r".to_owned();
-    menu.push_str(&item_to_string(&items[0]));
-    let max = items.len();
-    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), 
-                 Print(format!("MAX: {}!\r\n",max))).unwrap();
-    tools::pause();
+    let menu = "use left and right arrow keys to move through items";
+    let mut max = items.len();
     let mut index = 0;
     let _no_mods = KeyModifiers::empty();
 
-    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(menu))
-        .unwrap();
+    print_item(&0_usize, &items[0], Some(menu.to_string()));
 
     loop
     {
-        execute!(stdout, cursor::MoveTo(0,0)).unwrap();
+        if max == 0
+        {
+            execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), 
+                     Print("nothing in the saved list!\r\n")).unwrap();
+            tools::pause();
+            return items;
+        }
+
+        print_item(&index, &items[index], None);
 
         match read().unwrap()
         {
@@ -158,7 +161,6 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
                 if index < max - 1
                 {
                     index += 1;
-                    print_item(&index, &items[index])
                 }
             },
             Event::Key(KeyEvent //move left through menu
@@ -169,7 +171,6 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
                 if index > 0
                 {
                     index -= 1;
-                    print_item(&index, &items[index])
                 }
             },
             Event::Key(KeyEvent //break from function
@@ -178,7 +179,6 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
                             modifiers : KeyModifiers::CONTROL,
                        }) => {
                 execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0)).unwrap();
-
                 break
             },
             Event::Key(KeyEvent //delete the curent item
@@ -188,18 +188,23 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
                        }) => {
                 loop
                 {
-                    execute!(stdout, Clear(ClearType::All), Print("are you sure you would like to remove the food? ")).unwrap();
+                    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), 
+                             Print("are you sure you would like to remove the food?")).unwrap();
                     disable_raw_mode().unwrap();
                     let ans = tools::get_input();
                     enable_raw_mode().unwrap();
-                    execute!(stdout, Clear(ClearType::All), Print(format!("ans : {}",ans))).unwrap();
                     if ans == "yes\n" || ans == "y\n" && items.len() != 0
                     {
                         items.remove(index);
+                        if index > 0
+                        {index -= 1;}
+                        max -= 1;
                         break;
                     }
                     else if ans == "no\n" || ans == "n\n"
-                    {break}
+                    {
+                        break
+                    }
                 }
             },
             _ => (),
@@ -209,11 +214,17 @@ fn move_through_items(mut items: Vec<Hits>) -> Vec<Hits>
 }
 
 
-fn print_item(_index : &usize, i : &Hits)
+fn print_item(_index : &usize, i : &Hits, msg : Option<String>)
 {
     let mut stdout = stdout();
-    let holder = item_to_string(i);
-    execute!(stdout, Clear(ClearType::All), Print(holder)).unwrap(); 
+    let mut holder = item_to_string(i);
+    match msg
+    {
+        Some(val) => holder = format!("{}\n\r{}", val, holder),
+        None => (),
+    }
+    
+    execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0,0), Print(holder)).unwrap(); 
 }
 
 fn item_to_string(i : &Hits) -> String
