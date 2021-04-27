@@ -3,6 +3,8 @@ extern crate serde;
 use serde::Deserialize; //unpacking api call values
 use reqwest::Error; //error for reqest crate
 use std::fs;
+use druid::widget::{Button, Flex, Label};
+use druid::{AppLauncher, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc, Data};
 #[macro_use]
 extern crate crossterm;
 use crossterm::cursor; //tracking the cursor
@@ -37,12 +39,15 @@ struct Hits
 }
 
 #[derive(Deserialize, Debug)]
-struct Data 
+struct SearchData 
 {
     total_hits: u32,
     max_score: f32,
     hits: Vec<Hits>,
 }
+
+#[derive(Clone, Data)]
+struct Counter(i32);
 
 fn move_through_menu(stuff: &Vec<Hits>)
 {
@@ -245,9 +250,50 @@ fn item_to_string(i : &Hits) -> String
     );
 }
 
+fn test_display() -> Result<(), PlatformError>
+{
+    let main_window = WindowDesc::new(ui_builder)
+        .title("Hello, Druid!")
+        .window_size((200.0, 100.0));
+
+    let data: Counter = Counter(0);
+
+    AppLauncher::with_window(main_window)
+        .use_simple_logger()
+        .launch(data)
+}
+
+fn ui_builder() -> impl Widget<Counter>
+{
+    let text = LocalizedString::new("hello-counter")
+        .with_arg("count", |data: &Counter, _env| (*data).0.into());
+    let label = Label::new(text).padding(5.0).center();
+
+    let button_plus = Button::new("+1")
+        .on_click(|_ctx, data: &mut Counter, _env| (*data).0 += 1)
+        .padding(5.0);
+
+    let button_minus = Button::new("-1")
+        .on_click(|_ctx, data: &mut Counter, _env| (*data).0 -= 1)
+        .padding(5.0);
+
+    let flex = Flex::row()
+        .with_child(button_plus)
+        .with_spacer(1.0)
+        .with_child(button_minus);
+
+    Flex::column()
+        .with_child(label)
+        .with_child(flex)
+}
+
+
 #[tokio::main]
 async fn main()  -> Result<(), Error>
 {
+    test_display();
+    std::process::exit(0);
+
     let mut key = fs::read_to_string("nutrikey.txt").unwrap().trim().to_string().clone();
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'`');
     key = key.trim().to_string();
@@ -271,7 +317,7 @@ async fn main()  -> Result<(), Error>
         .await?;
 //    let text = res.text().await?;
 //   println!("{:?}", text);
-    let json: Data = res.json().await?;
+    let json: SearchData = res.json().await?;
     move_through_menu(&json.hits);
     }
         Ok(())

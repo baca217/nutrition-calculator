@@ -13,3 +13,4 @@ serde_derive = {version = "1.0.125", features = ["deserialize_in_place"] }
 tokio = { version = "1.4.0", features = ["full"] }
 crossterm = "0.16.0"
 percent-encoding = "2.1.0"
+druid = "0.7.0"
