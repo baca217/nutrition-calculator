@@ -47,7 +47,16 @@ struct SearchData
 }
 
 #[derive(Clone, Data)]
-struct Counter(i32);
+struct DisplayState
+{
+    item_id : String,
+    item_name : String,
+    brand_name : String,
+    nf_calories: f32,
+    nf_total_fat: f32,
+    nf_serving_size_qty : f32,
+    nf_serving_size_unit : String,
+}
 
 fn move_through_menu(stuff: &Vec<Hits>)
 {
@@ -292,7 +301,7 @@ fn ui_builder() -> impl Widget<Counter>
 async fn main()  -> Result<(), Error>
 {
     test_display();
-    std::process::exit(0);
+    std::process::exit();
 
     let mut key = fs::read_to_string("nutrikey.txt").unwrap().trim().to_string().clone();
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'`');
